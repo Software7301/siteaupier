@@ -1,0 +1,168 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Search, SlidersHorizontal, Car } from 'lucide-react'
+import CarCard from '@/components/CarCard'
+import FilterPills from '@/components/FilterPills'
+import { CarCardSkeleton } from '@/components/Loading'
+
+// Interface do carro
+interface Car {
+  id: string
+  name: string
+  brand: string
+  model: string
+  year: number
+  price: number
+  category: string
+  imageUrl: string
+  mileage: number | null
+  fuel: string
+  transmission: string
+  featured: boolean
+}
+
+// Apenas categoria "Todos" - mostra todos os 23 veículos
+const categoryFilters = [
+  { value: 'TODOS', label: 'Todos' },
+]
+
+export default function CarsPage() {
+  const [cars, setCars] = useState<Car[]>([])
+  const [filteredCars, setFilteredCars] = useState<Car[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedCategory, setSelectedCategory] = useState('TODOS')
+  const [searchTerm, setSearchTerm] = useState('')
+
+  // Buscar carros da API
+  useEffect(() => {
+    async function fetchCars() {
+      try {
+        const response = await fetch('/api/cars')
+        const data = await response.json()
+        setCars(data)
+        setFilteredCars(data)
+      } catch (error) {
+        console.error('Erro ao buscar carros:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchCars()
+  }, [])
+
+  // Filtrar carros quando categoria ou busca mudar
+  useEffect(() => {
+    let result = cars
+
+    // Filtrar por categoria
+    if (selectedCategory !== 'TODOS') {
+      result = result.filter((car) => car.category === selectedCategory)
+    }
+
+    // Filtrar por busca
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase()
+      result = result.filter(
+        (car) =>
+          car.name.toLowerCase().includes(search) ||
+          car.brand.toLowerCase().includes(search) ||
+          car.model.toLowerCase().includes(search)
+      )
+    }
+
+    setFilteredCars(result)
+  }, [cars, selectedCategory, searchTerm])
+
+  return (
+    <div className="min-h-screen py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-5xl font-display font-bold text-white mb-4">
+            Catálogo de <span className="text-gradient">Veículos</span>
+          </h1>
+          <p className="text-text-secondary text-lg max-w-2xl mx-auto">
+            Explore nossa seleção premium de veículos e encontre o carro ideal para você.
+          </p>
+        </div>
+
+        {/* Filtros */}
+        <div className="card-static p-6 mb-8 space-y-6">
+          {/* Barra de Busca */}
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" />
+            <input
+              type="text"
+              placeholder="Buscar por marca, modelo ou nome..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="input-field pl-12"
+            />
+          </div>
+
+          {/* Filtros de Categoria */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex items-center gap-2 text-text-secondary">
+              <SlidersHorizontal className="w-5 h-5" />
+              <span className="font-medium">Categorias:</span>
+            </div>
+            <FilterPills
+              options={categoryFilters}
+              selected={selectedCategory}
+              onChange={setSelectedCategory}
+            />
+          </div>
+        </div>
+
+        {/* Resultados */}
+        <div className="flex items-center justify-between mb-6">
+          <p className="text-text-secondary">
+            <span className="text-white font-semibold">{filteredCars.length}</span> veículo(s) encontrado(s)
+          </p>
+        </div>
+
+        {/* Grid de Carros */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[...Array(6)].map((_, i) => (
+              <CarCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : filteredCars.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredCars.map((car, index) => (
+              <div
+                key={car.id}
+                className="animate-slide-up"
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <CarCard car={car} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-16 card-static">
+            <Car className="w-16 h-16 text-text-muted mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">
+              Nenhum veículo encontrado
+            </h3>
+            <p className="text-text-secondary mb-6">
+              Tente ajustar os filtros ou a busca.
+            </p>
+            <button
+              onClick={() => {
+                setSelectedCategory('TODOS')
+                setSearchTerm('')
+              }}
+              className="btn-secondary"
+            >
+              Limpar Filtros
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+

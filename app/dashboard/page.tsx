@@ -1,0 +1,473 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { 
+  TrendingUp, 
+  TrendingDown,
+  DollarSign, 
+  ShoppingCart, 
+  Clock, 
+  Activity,
+  ArrowRight,
+  Car,
+  Users,
+  BarChart3,
+  PieChart as PieChartIcon,
+} from 'lucide-react'
+import { motion } from 'framer-motion'
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts'
+
+interface Stats {
+  vendasMes: number
+  vendasSemana: number
+  faturamentoMes: number
+  ticketMedio: number
+  pedidosPendentes: number
+  pedidosConcluidos: number
+}
+
+interface ChartData {
+  salesByMonth: Array<{ mes: string; vendas: number; valor: number }>
+  statusPedidos: Array<{ name: string; value: number; color: string }>
+  faturamentoAcumulado: Array<{ mes: string; faturamento: number }>
+}
+
+interface Order {
+  id: string
+  cliente: string
+  veiculo: string
+  valor: number
+  status: string
+  data: string
+}
+
+const statusLabels: Record<string, { label: string; color: string; bg: string }> = {
+  PENDING: { label: 'Pendente', color: 'text-blue-400', bg: 'bg-blue-500/20' },
+  PROCESSING: { label: 'Processando', color: 'text-yellow-400', bg: 'bg-yellow-500/20' },
+  COMPLETED: { label: 'Finalizado', color: 'text-green-400', bg: 'bg-green-500/20' },
+  CANCELLED: { label: 'Cancelado', color: 'text-red-400', bg: 'bg-red-500/20' },
+}
+
+function formatPrice(price: number): string {
+  if (price >= 1000000) {
+    return `R$ ${(price / 1000000).toFixed(1)}M`
+  }
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 0,
+  }).format(price)
+}
+
+function formatDate(date: string): string {
+  return new Date(date).toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function CustomTooltip({ active, payload, label }: any) {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-surface-dark border border-surface-border rounded-lg p-3 shadow-xl">
+        <p className="text-white font-medium mb-2">{label}</p>
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-sm" style={{ color: entry.color }}>
+            {entry.name}: {entry.value}
+          </p>
+        ))}
+      </div>
+    )
+  }
+  return null
+}
+
+function StatCard({ 
+  title, 
+  value, 
+  icon: Icon, 
+  color = 'primary',
+  delay = 0
+}: {
+  title: string
+  value: string | number
+  icon: React.ElementType
+  color?: 'primary' | 'accent' | 'yellow' | 'purple'
+  delay?: number
+}) {
+  const colors = {
+    primary: 'bg-primary/20 text-primary',
+    accent: 'bg-accent/20 text-accent',
+    yellow: 'bg-yellow-500/20 text-yellow-400',
+    purple: 'bg-purple-500/20 text-purple-400',
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+      className="card-static p-6 hover:border-primary/30 transition-all duration-300"
+    >
+      <div className="flex items-start justify-between">
+        <div className="space-y-3">
+          <p className="text-text-muted text-sm">{title}</p>
+          <p className="text-3xl font-display font-bold text-white">{value}</p>
+        </div>
+        <div className={`p-3 rounded-xl ${colors[color]}`}>
+          <Icon className="w-6 h-6" />
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+export default function DashboardPage() {
+  const [stats, setStats] = useState<Stats>({
+    vendasMes: 0,
+    vendasSemana: 0,
+    faturamentoMes: 0,
+    ticketMedio: 0,
+    pedidosPendentes: 0,
+    pedidosConcluidos: 0,
+  })
+  const [charts, setCharts] = useState<ChartData>({
+    salesByMonth: [],
+    statusPedidos: [],
+    faturamentoAcumulado: [],
+  })
+  const [recentOrders, setRecentOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        // Buscar estatísticas
+        const statsRes = await fetch('/api/dashboard/stats')
+        const statsData = await statsRes.json()
+        setStats(statsData.stats)
+        setCharts(statsData.charts)
+
+        // Buscar pedidos recentes
+        const ordersRes = await fetch('/api/dashboard/orders')
+        const ordersData = await ordersRes.json()
+        setRecentOrders(ordersData.slice(0, 5))
+      } catch (error) {
+        console.error('Erro ao buscar dados:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
+          <p className="text-text-secondary">Carregando dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const hasData = stats.vendasMes > 0 || stats.pedidosPendentes > 0
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-display font-bold text-white">
+            Dashboard
+          </h1>
+          <p className="text-text-secondary mt-1">
+            Bem-vindo ao painel administrativo da AutoPier
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-text-muted text-sm">
+          <Clock className="w-4 h-4" />
+          Última atualização: {new Date().toLocaleTimeString('pt-BR')}
+        </div>
+      </div>
+
+      {/* Cards de Estatísticas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Vendas no Mês"
+          value={stats.vendasMes}
+          icon={ShoppingCart}
+          color="primary"
+          delay={0}
+        />
+        <StatCard
+          title="Faturamento Mensal"
+          value={formatPrice(stats.faturamentoMes)}
+          icon={DollarSign}
+          color="accent"
+          delay={0.1}
+        />
+        <StatCard
+          title="Ticket Médio"
+          value={formatPrice(stats.ticketMedio)}
+          icon={Activity}
+          color="yellow"
+          delay={0.2}
+        />
+        <StatCard
+          title="Pedidos Pendentes"
+          value={stats.pedidosPendentes}
+          icon={Clock}
+          color="purple"
+          delay={0.3}
+        />
+      </div>
+
+      {!hasData && charts.salesByMonth.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card-static p-12 text-center"
+        >
+          <BarChart3 className="w-16 h-16 text-text-muted mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-white mb-2">
+            Nenhum dado disponível no momento
+          </h3>
+          <p className="text-text-secondary max-w-md mx-auto">
+            Os dados do dashboard serão preenchidos automaticamente conforme os clientes finalizarem compras no site.
+          </p>
+        </motion.div>
+      ) : (
+        <>
+          {/* Gráficos */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* BarChart - Vendas por Mês */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="card-static p-6"
+            >
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-6">
+                <BarChart3 className="w-5 h-5 text-primary" />
+                Vendas por Mês
+              </h3>
+              
+              {charts.salesByMonth.length > 0 ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={charts.salesByMonth}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                    <XAxis dataKey="mes" stroke="#888" fontSize={12} />
+                    <YAxis stroke="#888" fontSize={12} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar 
+                      dataKey="vendas" 
+                      name="Vendas"
+                      fill="#3b82f6"
+                      radius={[6, 6, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[280px] text-text-muted">
+                  Nenhuma venda registrada
+                </div>
+              )}
+            </motion.div>
+
+            {/* PieChart - Status dos Pedidos */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="card-static p-6"
+            >
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-6">
+                <PieChartIcon className="w-5 h-5 text-primary" />
+                Status dos Pedidos
+              </h3>
+              
+              {charts.statusPedidos.some(s => s.value > 0) ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie
+                      data={charts.statusPedidos.filter(s => s.value > 0)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {charts.statusPedidos.filter(s => s.value > 0).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[280px] text-text-muted">
+                  Nenhum pedido registrado
+                </div>
+              )}
+            </motion.div>
+          </div>
+
+          {/* Faturamento Acumulado */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+            className="card-static p-6"
+          >
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-6">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              Faturamento Acumulado
+            </h3>
+            
+            {charts.faturamentoAcumulado.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={charts.faturamentoAcumulado}>
+                  <defs>
+                    <linearGradient id="colorFaturamento" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                  <XAxis dataKey="mes" stroke="#888" fontSize={12} />
+                  <YAxis stroke="#888" fontSize={12} tickFormatter={(v) => formatPrice(v)} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Area 
+                    type="monotone" 
+                    dataKey="faturamento" 
+                    name="Faturamento"
+                    stroke="#22c55e" 
+                    strokeWidth={3}
+                    fillOpacity={1} 
+                    fill="url(#colorFaturamento)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-text-muted">
+                Nenhum faturamento registrado
+              </div>
+            )}
+          </motion.div>
+        </>
+      )}
+
+      {/* Pedidos Recentes */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.7 }}
+        className="card-static p-6"
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            <ShoppingCart className="w-5 h-5 text-primary" />
+            Pedidos Recentes
+          </h3>
+          <Link
+            href="/dashboard/pedidos"
+            className="text-primary hover:text-primary/80 text-sm font-medium flex items-center gap-1 transition-colors"
+          >
+            Ver todos
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+
+        {recentOrders.length === 0 ? (
+          <div className="text-center py-12">
+            <ShoppingCart className="w-12 h-12 text-text-muted mx-auto mb-3" />
+            <p className="text-text-secondary">Nenhum pedido encontrado</p>
+            <p className="text-text-muted text-sm mt-1">
+              Assim que um cliente finalizar uma compra, ela aparecerá aqui.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-surface-border">
+                  <th className="text-left text-text-muted text-sm font-medium py-3 px-4">Cliente</th>
+                  <th className="text-left text-text-muted text-sm font-medium py-3 px-4">Veículo</th>
+                  <th className="text-left text-text-muted text-sm font-medium py-3 px-4">Valor</th>
+                  <th className="text-left text-text-muted text-sm font-medium py-3 px-4">Status</th>
+                  <th className="text-left text-text-muted text-sm font-medium py-3 px-4">Data</th>
+                  <th className="text-right text-text-muted text-sm font-medium py-3 px-4">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentOrders.map((pedido) => {
+                  const status = statusLabels[pedido.status] || statusLabels.PENDING
+                  return (
+                    <tr key={pedido.id} className="border-b border-surface-border/50 hover:bg-surface/50 transition-colors">
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
+                            <Users className="w-5 h-5 text-primary" />
+                          </div>
+                          <span className="text-white font-medium">{pedido.cliente}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-2">
+                          <Car className="w-4 h-4 text-text-muted" />
+                          <span className="text-text-secondary">{pedido.veiculo}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-accent font-semibold">{formatPrice(pedido.valor)}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${status.bg} ${status.color}`}>
+                          {status.label}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-text-muted text-sm">{formatDate(pedido.data)}</span>
+                      </td>
+                      <td className="py-4 px-4 text-right">
+                        <Link
+                          href={`/dashboard/pedidos/${pedido.id}`}
+                          className="text-primary hover:text-primary/80 text-sm font-medium transition-colors"
+                        >
+                          Ver detalhes
+                        </Link>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  )
+}

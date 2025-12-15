@@ -1,0 +1,181 @@
+// AutoPier - Schema do Banco de Dados
+// Prisma ORM com PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Modelo de Usuário - Clientes e Donos da Concessionária
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  role      UserRole @default(CUSTOMER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  orders            Order[]
+  negotiationsAsBuyer    Negotiation[] @relation("BuyerNegotiations")
+  negotiationsAsSeller   Negotiation[] @relation("SellerNegotiations")
+  messagesSent      Message[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  CUSTOMER
+  DEALER
+  ADMIN
+}
+
+// Modelo de Veículo
+model Car {
+  id          String      @id @default(cuid())
+  name        String
+  brand       String
+  model       String
+  year        Int
+  price       Float
+  category    CarCategory
+  description String?
+  imageUrl    String
+  mileage     Int?
+  color       String?
+  fuel        FuelType    @default(FLEX)
+  transmission TransmissionType @default(AUTOMATIC)
+  featured    Boolean     @default(false)
+  available   Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relacionamentos
+  orders       Order[]
+  negotiations Negotiation[]
+
+  @@map("cars")
+}
+
+enum CarCategory {
+  SUV
+  ESPORTIVO
+  SEDAN
+  COMPACTO
+}
+
+enum FuelType {
+  FLEX
+  GASOLINA
+  DIESEL
+  ELETRICO
+  HIBRIDO
+}
+
+enum TransmissionType {
+  MANUAL
+  AUTOMATIC
+}
+
+// Modelo de Pedido (Checkout)
+model Order {
+  id            String        @id @default(cuid())
+  userId        String?
+  carId         String
+  customerName  String
+  customerRg    String
+  customerPhone String
+  paymentMethod PaymentMethod
+  totalPrice    Float
+  installments  Int           @default(1)
+  selectedColor String?
+  status        OrderStatus   @default(PENDING)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relacionamentos
+  user User?    @relation(fields: [userId], references: [id])
+  car  Car      @relation(fields: [carId], references: [id])
+
+  @@map("orders")
+}
+
+enum PaymentMethod {
+  PIX
+  DINHEIRO
+  CARTAO_CREDITO
+  CARTAO_DEBITO
+  FINANCIAMENTO
+  OUTROS
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+// Modelo de Negociação
+model Negotiation {
+  id          String           @id @default(cuid())
+  type        NegotiationType
+  carId       String?
+  buyerId     String
+  sellerId    String
+  status      NegotiationStatus @default(OPEN)
+  
+  // Dados do veículo para venda (quando cliente quer vender para concessionária)
+  vehicleName        String?
+  vehicleBrand       String?
+  vehicleYear        Int?
+  vehicleMileage     Int?
+  vehicleDescription String?
+  proposedPrice      Float?
+  
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relacionamentos
+  car      Car?      @relation(fields: [carId], references: [id])
+  buyer    User      @relation("BuyerNegotiations", fields: [buyerId], references: [id])
+  seller   User      @relation("SellerNegotiations", fields: [sellerId], references: [id])
+  messages Message[]
+
+  @@map("negotiations")
+}
+
+enum NegotiationType {
+  BUY   // Cliente quer comprar da concessionária
+  SELL  // Cliente quer vender para concessionária
+}
+
+enum NegotiationStatus {
+  OPEN
+  IN_PROGRESS
+  ACCEPTED
+  REJECTED
+  CLOSED
+}
+
+// Modelo de Mensagem do Chat
+model Message {
+  id            String   @id @default(cuid())
+  content       String
+  negotiationId String
+  senderId      String
+  createdAt     DateTime @default(now())
+
+  // Relacionamentos
+  negotiation Negotiation @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
+  sender      User        @relation(fields: [senderId], references: [id])
+
+  @@map("messages")
+}
+
